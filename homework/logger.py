@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 import torch.utils.tensorboard as tb
 
-
+print("test")
 def test_logging(logger: tb.SummaryWriter):
     """
     Your code here - finish logging the dummy loss and accuracy
