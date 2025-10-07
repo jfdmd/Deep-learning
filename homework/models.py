@@ -80,7 +80,7 @@ class MLPClassifier(nn.Module):
         super().__init__()
         # single hidden layer MLP
         in_features = 3 * h * w
-        hidden_dim = 512
+        hidden_dim = 100
         self.net = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_features, hidden_dim),
