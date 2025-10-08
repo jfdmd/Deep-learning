@@ -124,8 +124,8 @@ class MLPClassifierDeep(nn.Module):
         super().__init__()
         
         in_features = 3 * h * w
-        hidden_dim = 180
-        num_layers = 7  # total number of hidden layers
+        hidden_dim = 200
+        num_layers = 5  # total number of hidden layers
 
         layers = [nn.Flatten(), nn.Linear(in_features, hidden_dim), nn.ReLU()]
         for _ in range(num_layers - 1):
@@ -167,7 +167,24 @@ class MLPClassifierDeepResidual(nn.Module):
         """
         super().__init__()
 
-        raise NotImplementedError("MLPClassifierDeepResidual.__init__() is not implemented")
+        in_features = 3 * h * w
+        hidden_dim = 128
+        num_blocks = 2
+
+        # initial projection
+        self.initial = nn.Sequential(nn.Linear(in_features, hidden_dim), nn.ReLU())
+
+        # residual blocks
+        blocks = []
+        for _ in range(num_blocks):
+            blocks.append(nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, hidden_dim)))
+        # store blocks as ModuleList for residual application
+        self.blocks = nn.ModuleList(blocks)
+
+        # final classifier head
+        self.head = nn.Linear(hidden_dim, num_classes)
+
+        #raise NotImplementedError("MLPClassifierDeepResidual.__init__() is not implemented")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -177,7 +194,18 @@ class MLPClassifierDeepResidual(nn.Module):
         Returns:
             tensor (b, num_classes) logits
         """
-        raise NotImplementedError("MLPClassifierDeepResidual.forward() is not implemented")
+
+         # x -> flatten + initial projection
+        x = x.view(x.shape[0], -1)
+        x = self.initial(x)
+        # apply residual blocks
+        for block in self.blocks:
+            res = block(x)
+            x = x + res
+            x = torch.relu(x)
+
+        return self.head(x)
+        #raise NotImplementedError("MLPClassifierDeepResidual.forward() is not implemented")
 
 
 model_factory = {
