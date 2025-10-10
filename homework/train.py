@@ -15,7 +15,7 @@ def train(
     model_name: str = "linear",
     num_epoch: int = 50,
     lr: float = 1e-3,
-    batch_size: int = 16 ,
+    batch_size: int = 16  ,
     seed: int = 2024,
     **kwargs,
 ):
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp_dir", type=str, default="logs")
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--num_epoch", type=int, default=50)
-    parser.add_argument("--lr", type=float, default=0.00001)
+    parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--seed", type=int, default=2024)
 
     # optional: additional model hyperparamters

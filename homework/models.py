@@ -108,7 +108,9 @@ class MLPClassifierDeep(nn.Module):
         h: int = 64,
         w: int = 64,
         num_classes: int = 6,
-    ):
+        
+      ):
+        
         """
         An MLP with multiple hidden layers
 
@@ -124,10 +126,10 @@ class MLPClassifierDeep(nn.Module):
         super().__init__()
         
         in_features = 3 * h * w
-        hidden_dim = 200
-        num_layers = 5  # total number of hidden layers
+        hidden_dim = 100
+        num_layers = 4  # total number of hidden layers
 
-        layers = [nn.Flatten(), nn.Linear(in_features, hidden_dim), nn.ReLU()]
+        layers = [nn.Flatten(), nn.Linear(in_features, hidden_dim), nn.ReLU(), nn.Dropout(p=0.2)]
         for _ in range(num_layers - 1):
             layers.extend([nn.Linear(hidden_dim, hidden_dim), nn.ReLU()])
         layers.append(nn.Linear(hidden_dim, num_classes))
@@ -144,6 +146,7 @@ class MLPClassifierDeep(nn.Module):
         Returns:
             tensor (b, num_classes) logits
         """
+        
         return self.net(x)
         #raise NotImplementedError("MLPClassifierDeep.forward() is not implemented")
 
