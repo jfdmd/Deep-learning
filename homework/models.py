@@ -129,7 +129,7 @@ class MLPClassifierDeep(nn.Module):
         hidden_dim = 100
         num_layers = 4  # total number of hidden layers
 
-        layers = [nn.Flatten(), nn.Linear(in_features, hidden_dim), nn.ReLU(), nn.Dropout(p=0.2)]
+        layers = [nn.Flatten(), nn.Linear(in_features, hidden_dim), nn.ReLU(), nn.Dropout(p=0.20)]
         for _ in range(num_layers - 1):
             layers.extend([nn.Linear(hidden_dim, hidden_dim), nn.ReLU()])
         layers.append(nn.Linear(hidden_dim, num_classes))
