@@ -42,8 +42,37 @@ class Classifier(nn.Module):
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # TODO: implement
-        pass
+        # Define CNN architecture
+        self.features = nn.Sequential(
+            # First conv block
+            nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            
+            # Second conv block
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            
+            # Third conv block
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        
+        # Adaptive pooling to handle variable input sizes
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
+        
+        # Fully connected layers
+        self.classifier = nn.Sequential(
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, num_classes)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -53,11 +82,18 @@ class Classifier(nn.Module):
         Returns:
             tensor (b, num_classes) logits
         """
-        # optional: normalizes the input
+        # Normalize the input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
-
-        # TODO: replace with actual forward pass
-        logits = torch.randn(x.size(0), 6)
+        
+        # Forward through convolutional layers
+        features = self.features(z)
+        
+        # Global average pooling
+        pooled = self.adaptive_pool(features)
+        
+        # Flatten and pass through fully connected layers
+        flattened = pooled.view(pooled.size(0), -1)
+        logits = self.classifier(flattened)
 
         return logits
 
@@ -74,7 +110,6 @@ class Classifier(nn.Module):
             pred (torch.LongTensor): class labels {0, 1, ..., 5} with shape (b, h, w)
         """
         return self(x).argmax(dim=1)
-
 
 class Detector(torch.nn.Module):
     def __init__(
@@ -95,7 +130,7 @@ class Detector(torch.nn.Module):
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
         # TODO: implement
-        pass
+        #pass
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
