@@ -8,11 +8,12 @@ import torch.utils.tensorboard as tb
 
 from .models import ClassificationLoss, load_model, save_model
 from .road_dataset import load_data
+from .metrics import DetectionMetric
 
 
 def train(
     exp_dir: str = "logs",
-    model_name: str = "detector",
+    model_name: str = "detection",
     num_epoch: int = 50,
     lr: float = 1e-3,
     batch_size: int = 128,
@@ -49,38 +50,39 @@ def train(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     global_step = 0
-    metrics = {"train_acc": [], "val_acc": []}
+    #metrics = {"train_acc": [], "val_acc": []}
 
     # training loop
     for epoch in range(num_epoch):
         # clear metrics at beginning of epoch
-        for key in metrics:
-            metrics[key].clear()
-
+        #for key in metrics:
+            #metrics[key].clear()
+        
+        metric = DetectionMetric()
         model.train()
 
         for batch in train_data:
-            depth_label = batch["depth"].to(device ="cuda")
-            track_label= batch["track"].to(device ="cuda") 
+            depth_labels = batch["depth"].to(device ="cuda")
+            track_labels = batch["track"].to(device ="cuda") 
             img = batch["image"].to(device ="cuda")
 
             # forward segmentaion loss crossentropy
-            logits, dep_pred = model(img)
-            loss = loss_func(logits, track_label)
-            depth_loss = depth_loss_func(depth_label, dep_pred)
+            logits, depth_preds = model(img)
+            loss = loss_func(logits, track_labels)
+            depth_loss = depth_loss_func(depth_labels, depth_preds)
 
             # backward + step
             optimizer.zero_grad()
             (loss+depth_loss).backward()
             optimizer.step()
-            track_pred, depth_pred = model.predict(img)
+            track_preds, depth_preds = model.predict(img)
 
             # compute accuracy for this batch and save
-            preds = torch.argmax(logits, dim=1)
-            batch_acc_track = (track_pred == track_label).float().mean()
-            batch_acc_depth = (depth_pred == depth_label).float().mean()
-            metrics["depth_error"].append(batch_acc_depth.detach().cpu())
-            metrics["track_error"].append(batch_acc_track.detach().cpu())
+            #preds = torch.argmax(logits, dim=1)
+            #batch_acc_track = (track_pred == track_label).float().mean()
+            #batch_acc_depth = (depth_pred == depth_label).float().mean()
+            #metrics["depth_error"].append(batch_acc_depth.detach().cpu())
+            #metrics["track_error"].append(batch_acc_track.detach().cpu())
 
             # log training loss every iteration
             logger.add_scalar("train_loss", float(loss.detach().cpu()), global_step)
@@ -92,33 +94,36 @@ def train(
             model.eval()
 
             for batch in val_data:
-              depth_label = batch["depth"].to(device ="cuda")
-              track_label= batch["track"].to(device ="cuda") 
-              img = batch["image"].to(device ="cuda")
-
-                track_pred, depth_pred = model.predict(img)
-                # compute accuracy for this batch and save
-            preds = torch.argmax(logits, dim=1)
-            batch_acc_track = (track_pred == track_label).float().mean()
-            batch_acc_depth = (depth_pred == depth_label).float().mean()
-            metrics["depth_error"].append(batch_acc_depth.detach().cpu())
-            metrics["track_error"].append(batch_acc_track.detach().cpu())
+                DetectionMetric.add(batch)
+            IOU, abs_depth_error, tp_depth_error = DetectionMetric.compute()
+                
+              #depth_label = batch["depth"].to(device ="cuda")
+              #track_label= batch["track"].to(device ="cuda") 
+              #img = batch["image"].to(device ="cuda")
+              #track_pred, depth_pred = model.predict(img)
                
-            metrics["val_acc"].append(batch_acc.detach().cpu())
+             # compute accuracy for this batch and save
+            #preds = torch.argmax(logits, dim=1)
+            #batch_acc_track = (track_pred == track_label).float().mean()
+            #batch_acc_depth = (depth_pred == depth_label).float().mean()
+            #metrics["depth_error"].append(batch_acc_depth.detach().cpu())
+            #metrics["track_error"].append(batch_acc_track.detach().cpu())
+            #metrics["val_acc"].append(batch_acc.detach().cpu())
 
         # log average train and val accuracy to tensorboard
-        epoch_train_acc = torch.as_tensor(metrics["train_acc"]).mean()
-        epoch_val_acc = torch.as_tensor(metrics["val_acc"]).mean()
+        #epoch_train_acc = torch.as_tensor(metrics["train_acc"]).mean()
+        #epoch_val_acc = torch.as_tensor(metrics["val_acc"]).mean()
 
-        logger.add_scalar("train_accuracy", float(epoch_train_acc), global_step)
-        logger.add_scalar("val_accuracy", float(epoch_val_acc), global_step)
+        #logger.add_scalar("train_accuracy", float(epoch_train_acc), global_step)
+        #logger.add_scalar("val_accuracy", float(epoch_val_acc), global_step)
 
         # print on first, last, every 10th epoch
         if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
             print(
                 f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
-                f"train_acc={epoch_train_acc:.4f} "
-                f"val_acc={epoch_val_acc:.4f}"
+                f"IOU={IOU:.4f} "
+                f"Depth_error={abs_depth_error:.4f}"
+                f"Lane_boundry_error={tp_depth_error:.4f}"
             )
 
     # save and overwrite the model in the root directory for grading
