@@ -95,7 +95,7 @@ def train(
 
             for batch in val_data:
                 DetectionMetric.add(batch)
-            IOU, abs_depth_error, tp_depth_error = DetectionMetric.compute()
+            iou, abs_depth_error, tp_depth_error = DetectionMetric.compute()
                 
               #depth_label = batch["depth"].to(device ="cuda")
               #track_label= batch["track"].to(device ="cuda") 
