@@ -8,7 +8,8 @@ import torch.utils.tensorboard as tb
 
 from .models import ClassificationLoss, load_model, save_model
 from .road_dataset import load_data
-from .metrics import DetectionMetric
+from .metrics import DetectionMetric, ConfusionMatrix
+
 
 
 def train(
@@ -69,7 +70,7 @@ def train(
             # forward segmentaion loss crossentropy
             logits, depth_preds = model(img)
             loss = loss_func(logits, track_labels)
-            depth_loss = depth_loss_func(depth_labels, depth_preds)
+            depth_loss = depth_loss_func(depth_labels,depth_preds)
 
             # backward + step
             optimizer.zero_grad()
@@ -94,7 +95,7 @@ def train(
             model.eval()
 
             for batch in val_data:
-                DetectionMetric.add(batch)
+               DetectionMetric.add(isinstance, track_preds,track_labels,depth_preds,depth_labels)                
             iou, abs_depth_error, tp_depth_error = DetectionMetric.compute()
                 
               #depth_label = batch["depth"].to(device ="cuda")
