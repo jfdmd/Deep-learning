@@ -121,7 +121,7 @@ def train(
         if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
             print(
                 f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
-                f"IOU={IOU:.4f} "
+                f"IOU={iou:.4f} "
                 f"Depth_error={abs_depth_error:.4f}"
                 f"Lane_boundry_error={tp_depth_error:.4f}"
             )
