@@ -59,7 +59,7 @@ def train(
         #for key in metrics:
             #metrics[key].clear()
         
-        metric = DetectionMetric()
+        DM = DetectionMetric()
         model.train()
 
         for batch in train_data:
@@ -86,23 +86,22 @@ def train(
             #metrics["track_error"].append(batch_acc_track.detach().cpu())
 
             # log training loss every iteration
-            logger.add_scalar("train_loss", float(loss.detach().cpu()), global_step)
+            #logger.add_scalar("train_loss", float(loss.detach().cpu()), global_step)
 
-            global_step += 1
+            #global_step += 1
 
         # disable gradient computation and switch to evaluation mode
         with torch.inference_mode():
             model.eval()
 
-            for batch in val_data:
-               DetectionMetric.add(isinstance, track_preds,track_labels,depth_preds,depth_labels)                
-            iou, abs_depth_error, tp_depth_error = DetectionMetric.compute()
-                
-              #depth_label = batch["depth"].to(device ="cuda")
-              #track_label= batch["track"].to(device ="cuda") 
-              #img = batch["image"].to(device ="cuda")
-              #track_pred, depth_pred = model.predict(img)
-               
+            for batch in val_data:                           
+               depth_label = batch["depth"].to(device ="cuda")
+               track_label= batch["track"].to(device ="cuda") 
+               img = batch["image"].to(device ="cuda")
+               track_pred, depth_pred = model.predict(img)
+               DM.add( track_pred,track_label,depth_pred,depth_label)    
+            val_met = DM.compute()  
+             
              # compute accuracy for this batch and save
             #preds = torch.argmax(logits, dim=1)
             #batch_acc_track = (track_pred == track_label).float().mean()
@@ -122,9 +121,9 @@ def train(
         if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
             print(
                 f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
-                f"IOU={iou:.4f} "
-                f"Depth_error={abs_depth_error:.4f}"
-                f"Lane_boundry_error={tp_depth_error:.4f}"
+                f"IOU={val_met["iou"]:.4f} "
+                f"Depth_error={val_met["abs_depth_error"]:.4f}"
+                f"Lane_boundry_error={val_met["tp_depth_error"]:.4f}"
             )
 
     # save and overwrite the model in the root directory for grading
@@ -140,7 +139,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--exp_dir", type=str, default="logs")
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--num_epoch", type=int, default=50)
+    parser.add_argument("--num_epoch", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=2024)
 
