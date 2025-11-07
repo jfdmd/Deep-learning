@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--exp_dir", type=str, default="logs")
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--num_epoch", type=int, default=150)
+    parser.add_argument("--num_epoch", type=int, default=140)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--seed", type=int, default=2024)
 
