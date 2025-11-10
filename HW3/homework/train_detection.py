@@ -46,7 +46,7 @@ def train(
     val_data = load_data("drive_data/val", shuffle=False)
 
     # create loss function and optimizer
-    loss_func = ClassificationLoss()
+    loss_func =  ClassificationLoss()
     depth_loss_func = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--exp_dir", type=str, default="logs")
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--num_epoch", type=int, default=100)
+    parser.add_argument("--num_epoch", type=int, default=40)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--seed", type=int, default=2024)
 

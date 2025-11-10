@@ -1,12 +1,12 @@
 from pathlib import Path
-# test tesyt
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 HOMEWORK_DIR = Path(__file__).resolve().parent
 INPUT_MEAN = [0.2788, 0.2657, 0.2629]
 INPUT_STD = [0.2064, 0.1944, 0.2252]
-
 
 class ClassificationLoss(nn.Module):
     def forward(self, logits: torch.Tensor, target: torch.LongTensor) -> torch.Tensor:
@@ -60,7 +60,12 @@ class Classifier(nn.Module):
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.MaxPool2d(2),
+                nn.MaxPool2d(2),
+                # Fourth conv block (added)
+                nn.Conv2d(128, 256, kernel_size=3, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
         )
         
         # Adaptive pooling to handle variable input sizes
@@ -68,7 +73,7 @@ class Classifier(nn.Module):
         
         # Fully connected layers
         self.classifier = nn.Sequential(
-            nn.Linear(128, 256),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes)
@@ -111,6 +116,7 @@ class Classifier(nn.Module):
         """
         return self(x).argmax(dim=1)
 
+
 class Detector(torch.nn.Module):
     def __init__(
         self,
@@ -129,40 +135,52 @@ class Detector(torch.nn.Module):
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # Shared encoder (downsampling)
-        self.encoder = nn.Sequential(
+        # Shared encoder (downsampling) split into blocks so we can add skip connections.
+        # enc1 -> outputs 32 channels (after first pool)
+        # enc2 -> outputs 64 channels (after second pool)
+        # enc3 -> outputs 128 channels (after third pool)
+        # enc4 -> outputs 256 channels (after fourth pool)
+        self.enc1 = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2),
+        )
+
+        self.enc2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(2),
+        )
+
+        self.enc3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(2),
         )
 
-        # Segmentation head (upsample to input size)
-        self.seg_head = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),
+        self.enc4 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, num_classes, kernel_size=2, stride=2),
+            nn.MaxPool2d(2),
         )
 
-        # Depth head (upsample to input size)
-        self.depth_head = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2),
-            nn.Sigmoid(),  # output in [0,1]
-        )
+        # Segmentation head (upsample to input size) with simple skip additions
+        # We keep channels equal so we can add encoder features directly (no concat)
+    # Now that we have an extra encoder block (256), add one more upsample step
+        self.seg_up1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.seg_up2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.seg_up3 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        self.seg_up4 = nn.ConvTranspose2d(32, num_classes, kernel_size=2, stride=2)
+
+        # Depth head (upsample to input size) with same skip additions
+        self.depth_up1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.depth_up2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.depth_up3 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        self.depth_up4 = nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -179,9 +197,38 @@ class Detector(torch.nn.Module):
         """
         # Normalize input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
-        features = self.encoder(z)
-        logits = self.seg_head(features)
-        depth = self.depth_head(features).squeeze(1)  # (b, h, w)
+
+        # Encoder forward (capture intermediate features for skip connections)
+        e1 = self.enc1(z)   # (b, 32, h/2, w/2)
+        e2 = self.enc2(e1)  # (b, 64, h/4, w/4)
+        e3 = self.enc3(e2)  # (b,128,h/8,w/8)
+        features = self.enc4(e3)  # (b,256,h/16,w/16)
+
+        # Segmentation decoder with skip additions
+        x = self.seg_up1(features)  # -> (b,128,h/8,w/8)
+        x = F.relu(x)
+        x = x + e3  # simple skip add
+        x = self.seg_up2(x)  # -> (b,64,h/4,w/4)
+        x = F.relu(x)
+        x = x + e2
+        x = self.seg_up3(x)  # -> (b,32,h/2,w/2)
+        x = F.relu(x)
+        x = x + e1
+        logits = self.seg_up4(x)  # -> (b,num_classes,h,w)
+
+        # Depth decoder with skip additions
+        d = self.depth_up1(features)
+        d = F.relu(d)
+        d = d + e3
+        d = self.depth_up2(d)
+        d = F.relu(d)
+        d = d + e2
+        d = self.depth_up3(d)
+        d = F.relu(d)
+        d = d + e1
+        depth = self.depth_up4(d).squeeze(1)  # (b, h, w)
+        depth = torch.sigmoid(depth)
+
         return logits, depth
 
     def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
