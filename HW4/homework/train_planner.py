@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from . import models
 from .datasets.road_dataset import load_data
 from .metrics import PlannerMetric
-
+from .models import  load_model, save_model
 
 def masked_l1_loss(preds: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     """Compute mean L1 loss only over valid waypoints.
@@ -58,38 +58,84 @@ def make_dataloaders(dataset_path: Path, model_name: str, batch_size: int) -> Tu
 
 
 def train(
-    model: torch.nn.Module,
-    loader: DataLoader,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-) -> float:
-    model.train()
-    running_loss = 0.0
-    n_batches = 0
+    exp_dir: str = "logs",
+    model_name: str = "classifier",
+    transform_pipeline: str = 'state_only',
+    dataset_name="drive_data",
+    num_workers: int = 4,
+    num_epoch: int = 50,
+    lr: float = 1e-3,
+    batch_size: int = 16,
+    seed: int = 2024,
+    **kwargs,
+):
+    """Trains a model."""
+    #def train_epoch(
+    #    model: torch.nn.Module
+    #    loader: DataLoader
+    #    optimizer: torch.optim.Optimizer
+    #    device: torch.device
+    #) -> float:
 
-    for batch in loader:
-        optimizer.zero_grad()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = load_model(model_name, **kwargs).to(device)
+    train_loader, val_loader = make_dataloaders(Path(dataset_name), model_name, batch_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        # prepare inputs depending on model type
-        if isinstance(model, models.CNNPlanner):
-            image = batch["image"].to(device)
-            preds = model(image=image)
-        else:
-            track_left = batch["track_left"].to(device)
-            track_right = batch["track_right"].to(device)
-            preds = model(track_left=track_left, track_right=track_right)
 
-        labels = batch["waypoints"].to(device)
-        labels_mask = batch["waypoints_mask"].to(device)
+    best_val_loss = float("inf")
+    start_time = time.time()
 
-        loss = masked_l1_loss(preds, labels, labels_mask)
-        loss.backward()
-        optimizer.step()
 
-        running_loss += float(loss.item())
-        n_batches += 1
+    for epoch in range(1, num_epoch + 1):
+        t0 = time.time()
+        model.train()
+        running_loss = 0.0
+        n_batches = 0
 
-    return running_loss / max(1, n_batches)
+        for batch in train_loader:
+            optimizer.zero_grad()
+
+            # prepare inputs depending on model type
+            if isinstance(model, models.CNNPlanner):
+                image = batch["image"].to(device)
+                preds = model(image=image)
+            else:
+                # Assuming batch is a dictionary based on load_data and transform_pipeline
+                track_left = batch["track_left"].to(device)
+                track_right = batch["track_right"].to(device)
+                preds = model(track_left=track_left, track_right=track_right)
+
+
+            labels = batch["waypoints"].to(device)
+            labels_mask = batch["waypoints_mask"].to(device)
+
+            loss = masked_l1_loss(preds, labels, labels_mask)
+            loss.backward()
+            optimizer.step()
+
+            running_loss += float(loss.item())
+            n_batches += 1
+
+        train_loss = running_loss / max(1, n_batches)
+
+
+        val_loss, stats = validate(model, val_loader, device)
+        t1 = time.time()
+
+        print(
+            f"Epoch {epoch}/{num_epoch}  time={t1-t0:.1f}s  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "+
+            f"long={stats['longitudinal_error']:.4f} lat={stats['lateral_error']:.4f} samples={stats['num_samples']}"
+        )
+
+        # save best
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            output_path = models.save_model(model)
+            print(f"Saved best model to {output_path} (val_loss={best_val_loss:.4f})")
+
+    total_time = time.time() - start_time
+    print(f"Time to train {total_time/60:.2f} minutes")
 
 
 @torch.no_grad()
@@ -171,7 +217,7 @@ def main() -> None:
 
         # save best
         if val_loss < best_val_loss:
-            best_val_loss = val_loss
+            best_val_loss = best_val_loss
             output_path = models.save_model(model)
             print(f"Saved best model to {output_path} (val_loss={best_val_loss:.4f})")
 
@@ -181,4 +227,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
