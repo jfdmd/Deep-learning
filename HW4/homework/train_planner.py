@@ -59,7 +59,7 @@ def make_dataloaders(dataset_path: Path, model_name: str, batch_size: int) -> Tu
 
 def train(
     exp_dir: str = "logs",
-    model_name: str = "classifier",
+    model_name: str = "cl",
     transform_pipeline: str = 'state_only',
     dataset_name="drive_data",
     num_workers: int = 4,

@@ -194,12 +194,22 @@ class CNNPlanner(torch.nn.Module):
             nn.MaxPool2d(2, 2),  # 24x32 -> 12x16
         )
 
+        # Additional encoder block (deeper features)
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2, 2),  # 12x16 -> 6x8
+        )
+
         # Adaptive average pooling to get a fixed-size feature vector
         self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         # Decoder: fully connected layers to predict waypoints
+        # note: input dim changed to 256 due to conv4 output channels
         self.fc = nn.Sequential(
-            nn.Linear(128, 256),
+            nn.Linear(256, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(256, 128),
@@ -223,10 +233,11 @@ class CNNPlanner(torch.nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
+        x = self.conv4(x)
 
         # Adaptive pooling
-        x = self.adaptive_pool(x)  # (b, 128, 1, 1)
-        x = x.flatten(1)  # (b, 128)
+        x = self.adaptive_pool(x)  # (b, 256, 1, 1)
+        x = x.flatten(1)  # (b, 256)
 
         # Decoder
         x = self.fc(x)  # (b, n_waypoints * 2)
@@ -236,6 +247,7 @@ class CNNPlanner(torch.nn.Module):
         x = x.reshape(batch_size, self.n_waypoints, 2)  # (b, n_waypoints, 2)
 
         return x
+
 
 
 MODEL_FACTORY = {
